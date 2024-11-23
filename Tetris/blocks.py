@@ -5,24 +5,28 @@ Point = namedtuple('Point', 'X Y')
 Shape = namedtuple('Shape', 'X Y Width Height')
 Block = namedtuple('Block', 'template start_pos end_pos name next')
 
-# 方块形状的设计，我最初我是做成 4 × 4，因为长宽最长都是4，这样旋转的时候就不考虑怎么转了，就是从一个图形替换成另一个
-# 其实要实现这个功能，只需要固定左上角的坐标就可以了
+# 方塊形狀設計說明：
+# 1. 使用 4×4 的矩陣來設計方塊，因為所有方塊的長寬最大都是4格
+# 2. 這樣的設計可以簡化旋轉邏輯，只需要替換成預定義的下一個方向即可
+# 3. 通過固定左上角座標來確保方塊位置的一致性
 
-# S形方块
+# S形方塊
 S_BLOCK = [Block(['.OO',
                   'OO.',
                   '...'], Point(0, 0), Point(2, 1), 'S', 1),
            Block(['O..',
                   'OO.',
                   '.O.'], Point(0, 0), Point(1, 2), 'S', 0)]
-# Z形方块
+
+# Z形方塊
 Z_BLOCK = [Block(['OO.',
                   '.OO',
                   '...'], Point(0, 0), Point(2, 1), 'Z', 1),
            Block(['.O.',
                   'OO.',
                   'O..'], Point(0, 0), Point(1, 2), 'Z', 0)]
-# I型方块
+
+# I型方塊
 I_BLOCK = [Block(['.O..',
                   '.O..',
                   '.O..',
@@ -31,10 +35,12 @@ I_BLOCK = [Block(['.O..',
                   '....',
                   'OOOO',
                   '....'], Point(0, 2), Point(3, 2), 'I', 0)]
-# O型方块
+
+# O型方塊
 O_BLOCK = [Block(['OO',
                   'OO'], Point(0, 0), Point(1, 1), 'O', 0)]
-# J型方块
+
+# J型方塊
 J_BLOCK = [Block(['O..',
                   'OOO',
                   '...'], Point(0, 0), Point(2, 1), 'J', 1),
@@ -47,7 +53,8 @@ J_BLOCK = [Block(['O..',
            Block(['.O.',
                   '.O.',
                   'OO.'], Point(0, 0), Point(1, 2), 'J', 0)]
-# L型方块
+
+# L型方塊
 L_BLOCK = [Block(['..O',
                   'OOO',
                   '...'], Point(0, 0), Point(2, 1), 'L', 1),
@@ -60,7 +67,8 @@ L_BLOCK = [Block(['..O',
            Block(['OO.',
                   '.O.',
                   '.O.'], Point(0, 0), Point(1, 2), 'L', 0)]
-# T型方块
+
+# T型方塊
 T_BLOCK = [Block(['.O.',
                   'OOO',
                   '...'], Point(0, 0), Point(2, 1), 'T', 1),
@@ -84,6 +92,7 @@ BLOCKS = {'O': O_BLOCK,
 
 
 def get_block():
+    """隨機取得一個方塊"""
     block_name = random.choice('OIZTLSJ')
     b = BLOCKS[block_name]
     idx = random.randint(0, len(b) - 1)
@@ -91,5 +100,6 @@ def get_block():
 
 
 def get_next_block(block):
+    """取得方塊的下一個旋轉狀態"""
     b = BLOCKS[block.name]
     return b[block.next]

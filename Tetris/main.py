@@ -4,51 +4,140 @@ import pygame
 from pygame.locals import *
 import blocks
 
-SIZE = 30  # 每个小方格大小
-BLOCK_HEIGHT = 25  # 游戏区高度
-BLOCK_WIDTH = 10   # 游戏区宽度
-BORDER_WIDTH = 4   # 游戏区边框宽度
-BORDER_COLOR = (40, 40, 200)  # 游戏区边框颜色
-SCREEN_WIDTH = SIZE * (BLOCK_WIDTH + 5)  # 游戏屏幕的宽
-SCREEN_HEIGHT = SIZE * BLOCK_HEIGHT      # 游戏屏幕的高
-BG_COLOR = (40, 40, 60)  # 背景色
-BLOCK_COLOR = (20, 128, 200)  #
+# 遊戲區域設定
+SIZE = 30  # 每個小方格大小
+BLOCK_HEIGHT = 25  # 遊戲區高度
+BLOCK_WIDTH = 10   # 遊戲區寬度
+BORDER_WIDTH = 4   # 遊戲區邊框寬度
+
+# 顏色定義
+BORDER_COLOR = (40, 40, 200)  # 遊戲區邊框顏色
+BG_COLOR = (40, 40, 60)      # 背景色
+BLOCK_COLOR = (20, 128, 200)  # 方塊顏色
 BLACK = (0, 0, 0)
-RED = (200, 30, 30)      # GAME OVER 的字体颜色
+WHITE = (255, 255, 255)
+RED = (200, 30, 30)         # GAME OVER 顏色
+BUTTON_COLOR = (60, 60, 100)
+BUTTON_HOVER_COLOR = (80, 80, 120)
 
+# 螢幕設定
+INFO_WIDTH = 200  # 資訊區域寬度
+SCREEN_WIDTH = SIZE * BLOCK_WIDTH + BORDER_WIDTH + INFO_WIDTH  # 遊戲螢幕的寬
+SCREEN_HEIGHT = SIZE * BLOCK_HEIGHT      # 遊戲螢幕的高
 
-def print_text(screen, font, x, y, text, fcolor=(255, 255, 255)):
-    imgText = font.render(text, True, fcolor)
-    screen.blit(imgText, (x, y))
+# 支援的字體列表
+FONT_LIST = ['微軟正黑體', 'Microsoft JhengHei', 'PMingLiU', 'MingLiU']
 
+def get_system_font():
+    """獲取系統支援的中文字體"""
+    available_font = None
+    for font_name in FONT_LIST:
+        if font_name.lower() in [f.lower() for f in pygame.font.get_fonts()]:
+            available_font = font_name
+            break
+    return available_font or pygame.font.get_default_font()
+
+def print_text(screen, font, x, y, text, fcolor=WHITE):
+    """繪製文字"""
+    try:
+        imgText = font.render(text, True, fcolor)
+        screen.blit(imgText, (x, y))
+    except pygame.error:
+        pass  # 忽略字體渲染錯誤
+
+class Button:
+    """按鈕類"""
+    def __init__(self, screen, text, x, y, width, height, color, hover_color, font):
+        self.screen = screen
+        self.text = text
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.color = color
+        self.hover_color = hover_color
+        self.current_color = color
+        self.rect = pygame.Rect(x, y, width, height)
+        self.font = font
+        
+    def draw(self):
+        """繪製按鈕"""
+        pygame.draw.rect(self.screen, self.current_color, self.rect)
+        pygame.draw.rect(self.screen, WHITE, self.rect, 2)  # 白色邊框
+        text_surface = self.font.render(self.text, True, WHITE)
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        self.screen.blit(text_surface, text_rect)
+        
+    def handle_event(self, event):
+        """處理按鈕事件"""
+        if event.type == pygame.MOUSEMOTION:
+            if self.rect.collidepoint(event.pos):
+                self.current_color = self.hover_color
+            else:
+                self.current_color = self.color
+        
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                return True
+        return False
 
 def main():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption('俄羅斯方塊')
 
-    font1 = pygame.font.SysFont('microsoftyaheiui', 24)  # 黑体24
-    font2 = pygame.font.Font(None, 72)  # GAME OVER 的字体
-    font_pos_x = BLOCK_WIDTH * SIZE + BORDER_WIDTH + 10  # 右侧信息显示区域字体位置的X坐标
-    gameover_size = font2.size('GAME OVER')
-    font1_height = int(font1.size('得分')[1])
+    # 初始化字體
+    system_font = get_system_font()
+    font1 = pygame.font.SysFont(system_font, 24)  # 一般文字
+    font2 = pygame.font.Font(None, 72)  # GAME OVER 字體
+    button_font = pygame.font.SysFont(system_font, 20)  # 按鈕文字
 
-    cur_block = None   # 当前下落方块
-    next_block = None  # 下一个方块
-    cur_pos_x, cur_pos_y = 0, 0
+    # 計算位置
+    info_area_x = BLOCK_WIDTH * SIZE + BORDER_WIDTH + 20
+    button_width = 160
+    button_height = 40
+    button_margin = 20  # Increased margin between buttons
+    
+    # 計算按鈕起始位置，將按鈕位置往下移動
+    button_start_y = SCREEN_HEIGHT // 2  # Start buttons from middle of screen
 
-    game_area = None    # 整个游戏区域
-    game_over = True
-    start = False       # 是否开始，当start = True，game_over = True 时，才显示 GAME OVER
-    score = 0           # 得分
-    orispeed = 0.5      # 原始速度
-    speed = orispeed    # 当前速度
-    pause = False       # 暂停
-    last_drop_time = None   # 上次下落时间
-    last_press_time = None  # 上次按键时间
+    # 初始化按鈕
+    buttons = {
+        'start': Button(screen, '開始遊戲', info_area_x, button_start_y, 
+                       button_width, button_height, BUTTON_COLOR, BUTTON_HOVER_COLOR, button_font),
+        'pause': Button(screen, '暫停', info_area_x, button_start_y + button_height + button_margin,
+                       button_width, button_height, BUTTON_COLOR, BUTTON_HOVER_COLOR, button_font),
+        'rotate': Button(screen, '旋轉', info_area_x, button_start_y + (button_height + button_margin) * 2,
+                        button_width, button_height, BUTTON_COLOR, BUTTON_HOVER_COLOR, button_font),
+        'left': Button(screen, '左移', info_area_x, button_start_y + (button_height + button_margin) * 3,
+                      button_width, button_height, BUTTON_COLOR, BUTTON_HOVER_COLOR, button_font),
+        'right': Button(screen, '右移', info_area_x, button_start_y + (button_height + button_margin) * 4,
+                       button_width, button_height, BUTTON_COLOR, BUTTON_HOVER_COLOR, button_font),
+        'down': Button(screen, '快速下落', info_area_x, button_start_y + (button_height + button_margin) * 5,
+                      button_width, button_height, BUTTON_COLOR, BUTTON_HOVER_COLOR, button_font)
+    }
+
+    # 初始化遊戲變數
+    global cur_block, next_block, game_area, cur_pos_x, cur_pos_y, game_over, score, speed, orispeed, last_drop_time, last_press_time, pause, start
+    
+    # Initialize the game variables
+    cur_block = blocks.get_block()
+    next_block = blocks.get_block()
+    game_area = [['.'] * BLOCK_WIDTH for _ in range(BLOCK_HEIGHT)]
+    cur_pos_x = (BLOCK_WIDTH - cur_block.end_pos.X - 1) // 2
+    cur_pos_y = -1 - cur_block.end_pos.Y
+    game_over = True  # Start with game over state
+    score = 0
+    orispeed = 0.5
+    speed = orispeed
+    last_drop_time = time.time()
+    last_press_time = time.time()
+    pause = False
+    start = False
 
     def _dock():
-        nonlocal cur_block, next_block, game_area, cur_pos_x, cur_pos_y, game_over, score, speed
+        """處理方塊著陸"""
+        global cur_block, next_block, game_area, cur_pos_x, cur_pos_y, game_over, score, speed
         for _i in range(cur_block.start_pos.Y, cur_block.end_pos.Y + 1):
             for _j in range(cur_block.start_pos.X, cur_block.end_pos.X + 1):
                 if cur_block.template[_i][_j] != '.':
@@ -56,13 +145,13 @@ def main():
         if cur_pos_y + cur_block.start_pos.Y <= 0:
             game_over = True
         else:
-            # 计算消除
+            # 計算消除
             remove_idxs = []
             for _i in range(cur_block.start_pos.Y, cur_block.end_pos.Y + 1):
                 if all(_x == '0' for _x in game_area[cur_pos_y + _i]):
                     remove_idxs.append(cur_pos_y + _i)
             if remove_idxs:
-                # 计算得分
+                # 計算得分
                 remove_count = len(remove_idxs)
                 if remove_count == 1:
                     score += 100
@@ -89,7 +178,8 @@ def main():
             cur_pos_x, cur_pos_y = (BLOCK_WIDTH - cur_block.end_pos.X - 1) // 2, -1 - cur_block.end_pos.Y
 
     def _judge(pos_x, pos_y, block):
-        nonlocal game_area
+        """判斷方塊是否可以移動到指定位置"""
+        global game_area
         for _i in range(block.start_pos.Y, block.end_pos.Y + 1):
             if pos_y + block.end_pos.Y >= BLOCK_HEIGHT:
                 return False
@@ -98,63 +188,128 @@ def main():
                     return False
         return True
 
+    def _draw_background(screen):
+        """繪製背景"""
+        # 填充背景色
+        screen.fill(BG_COLOR)
+        # 画游戏区域分隔线
+        pygame.draw.line(screen, BORDER_COLOR,
+                         (SIZE * BLOCK_WIDTH + BORDER_WIDTH // 2, 0),
+                         (SIZE * BLOCK_WIDTH + BORDER_WIDTH // 2, SCREEN_HEIGHT), BORDER_WIDTH)
+
+    def _draw_gridlines(screen):
+        """繪製網格線"""
+        # 画网格线 竖线
+        for x in range(BLOCK_WIDTH):
+            pygame.draw.line(screen, BLACK, (x * SIZE, 0), (x * SIZE, SCREEN_HEIGHT), 1)
+        # 画网格线 横线
+        for y in range(BLOCK_HEIGHT):
+            pygame.draw.line(screen, BLACK, (0, y * SIZE), (BLOCK_WIDTH * SIZE, y * SIZE), 1)
+
+    def _draw_game_area(screen, game_area):
+        """繪製遊戲區域"""
+        if game_area:
+            for i, row in enumerate(game_area):
+                for j, cell in enumerate(row):
+                    if cell != '.':
+                        pygame.draw.rect(screen, BLOCK_COLOR, (j * SIZE, i * SIZE, SIZE, SIZE), 0)
+
+    def _draw_block(screen, block, offset_x, offset_y, pos_x, pos_y):
+        """繪製方塊"""
+        if block:
+            for i in range(block.start_pos.Y, block.end_pos.Y + 1):
+                for j in range(block.start_pos.X, block.end_pos.X + 1):
+                    if block.template[i][j] != '.':
+                        pygame.draw.rect(screen, BLOCK_COLOR,
+                                         (offset_x + (pos_x + j) * SIZE, offset_y + (pos_y + i) * SIZE, SIZE, SIZE), 0)
+
+    def _draw_info(screen, font, pos_x, font_height, score):
+        """繪製遊戲資訊"""
+        info_y = 10
+        line_spacing = font_height + 10
+        
+        # 遊戲狀態資訊
+        print_text(screen, font, pos_x, info_y, f'得分：{score}')
+        info_y += line_spacing
+        print_text(screen, font, pos_x, info_y, f'速度：{score//10000}')
+        info_y += line_spacing * 2
+        
+        # 下一個方塊提示
+        print_text(screen, font, pos_x, info_y, '下一個方塊：')
+        info_y += line_spacing * 2
+        
+        # 鍵盤操作說明
+        print_text(screen, font, pos_x, info_y, '鍵盤操作：')
+        info_y += line_spacing
+        print_text(screen, font, pos_x, info_y, '↑ : 旋轉')
+        info_y += line_spacing
+        print_text(screen, font, pos_x, info_y, '← → : 左右移動')
+        info_y += line_spacing
+        print_text(screen, font, pos_x, info_y, '↓ : 加速下落')
+        info_y += line_spacing
+        print_text(screen, font, pos_x, info_y, 'Space : 暫停')
+        info_y += line_spacing
+        print_text(screen, font, pos_x, info_y, 'Enter : 開始')
+
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
                 sys.exit()
-            elif event.type == KEYDOWN:
-                if event.key == K_RETURN:
-                    if game_over:
-                        start = True
-                        game_over = False
-                        score = 0
-                        last_drop_time = time.time()
-                        last_press_time = time.time()
-                        game_area = [['.'] * BLOCK_WIDTH for _ in range(BLOCK_HEIGHT)]
-                        cur_block = blocks.get_block()
-                        next_block = blocks.get_block()
-                        cur_pos_x, cur_pos_y = (BLOCK_WIDTH - cur_block.end_pos.X - 1) // 2, -1 - cur_block.end_pos.Y
-                elif event.key == K_SPACE:
-                    if not game_over:
-                        pause = not pause
-                elif event.key in (K_w, K_UP):
-                    # 旋转
-                    # 其实记得不是很清楚了，比如
-                    # .0.
-                    # .00
-                    # ..0
-                    # 这个在最右边靠边的情况下是否可以旋转，我试完了网上的俄罗斯方块，是不能旋转的，这里我们就按不能旋转来做
-                    # 我们在形状设计的时候做了很多的空白，这样只需要规定整个形状包括空白部分全部在游戏区域内时才可以旋转
-                    if 0 <= cur_pos_x <= BLOCK_WIDTH - len(cur_block.template[0]):
-                        _next_block = blocks.get_next_block(cur_block)
-                        if _judge(cur_pos_x, cur_pos_y, _next_block):
-                            cur_block = _next_block
+            
+            # 處理按鈕事件
+            if buttons['start'].handle_event(event):
+                if game_over:
+                    start = True
+                    game_over = False
+                    score = 0
+                    speed = orispeed
+                    last_drop_time = time.time()
+                    last_press_time = time.time()
+                    game_area = [['.'] * BLOCK_WIDTH for _ in range(BLOCK_HEIGHT)]
+                    cur_block = blocks.get_block()
+                    next_block = blocks.get_block()
+                    cur_pos_x, cur_pos_y = (BLOCK_WIDTH - cur_block.end_pos.X - 1) // 2, -1 - cur_block.end_pos.Y
+            
+            if not game_over:
+                if buttons['pause'].handle_event(event):
+                    pause = not pause
 
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_LEFT:
-                if not game_over and not pause:
-                    if time.time() - last_press_time > 0.1:
-                        last_press_time = time.time()
-                        if cur_pos_x > - cur_block.start_pos.X:
-                            if _judge(cur_pos_x - 1, cur_pos_y, cur_block):
-                                cur_pos_x -= 1
-            if event.key == pygame.K_RIGHT:
-                if not game_over and not pause:
-                    if time.time() - last_press_time > 0.1:
-                        last_press_time = time.time()
-                        # 不能移除右边框
-                        if cur_pos_x + cur_block.end_pos.X + 1 < BLOCK_WIDTH:
-                            if _judge(cur_pos_x + 1, cur_pos_y, cur_block):
-                                cur_pos_x += 1
-            if event.key == pygame.K_DOWN:
-                if not game_over and not pause:
-                    if time.time() - last_press_time > 0.1:
-                        last_press_time = time.time()
-                        if not _judge(cur_pos_x, cur_pos_y + 1, cur_block):
-                            _dock()
-                        else:
-                            last_drop_time = time.time()
-                            cur_pos_y += 1
+            if event.type == pygame.KEYDOWN:
+                if not game_over:
+                    if event.key == pygame.K_SPACE:
+                        pause = not pause
+                    
+                    if not pause:
+                        if event.key in (pygame.K_UP, pygame.K_w):
+                            if time.time() - last_press_time > 0.1:
+                                last_press_time = time.time()
+                                if 0 <= cur_pos_x <= BLOCK_WIDTH - len(cur_block.template[0]):
+                                    _next_block = blocks.get_next_block(cur_block)
+                                    if _judge(cur_pos_x, cur_pos_y, _next_block):
+                                        cur_block = _next_block
+                        
+                        elif event.key == pygame.K_LEFT:
+                            if time.time() - last_press_time > 0.1:
+                                last_press_time = time.time()
+                                if cur_pos_x > - cur_block.start_pos.X:
+                                    if _judge(cur_pos_x - 1, cur_pos_y, cur_block):
+                                        cur_pos_x -= 1
+                        
+                        elif event.key == pygame.K_RIGHT:
+                            if time.time() - last_press_time > 0.1:
+                                last_press_time = time.time()
+                                if cur_pos_x + cur_block.end_pos.X + 1 < BLOCK_WIDTH:
+                                    if _judge(cur_pos_x + 1, cur_pos_y, cur_block):
+                                        cur_pos_x += 1
+                        
+                        elif event.key == pygame.K_DOWN:
+                            if time.time() - last_press_time > 0.1:
+                                last_press_time = time.time()
+                                if not _judge(cur_pos_x, cur_pos_y + 1, cur_block):
+                                    _dock()
+                                else:
+                                    last_drop_time = time.time()
+                                    cur_pos_y += 1
 
         _draw_background(screen)
 
@@ -162,15 +317,17 @@ def main():
 
         _draw_gridlines(screen)
 
-        _draw_info(screen, font1, font_pos_x, font1_height, score)
-        # 画显示信息中的下一个方块
-        _draw_block(screen, next_block, font_pos_x, 30 + (font1_height + 6) * 5, 0, 0)
-
         if not game_over:
-            cur_drop_time = time.time()
-            if cur_drop_time - last_drop_time > speed:
-                if not pause:
-                    # 不应该在下落的时候来判断到底没，我们玩俄罗斯方块的时候，方块落到底的瞬间是可以进行左右移动
+            if pause:
+                # Draw pause text in the center of the game area
+                pause_text = font2.render("PAUSE", True, WHITE)
+                text_rect = pause_text.get_rect(center=(BLOCK_WIDTH * SIZE // 2, SCREEN_HEIGHT // 2))
+                screen.blit(pause_text, text_rect)
+            else:
+                # Draw current block and handle dropping
+                _draw_block(screen, cur_block, 0, 0, cur_pos_x, cur_pos_y)
+                cur_drop_time = time.time()
+                if cur_drop_time - last_drop_time > speed:
                     if not _judge(cur_pos_x, cur_pos_y + 1, cur_block):
                         _dock()
                     else:
@@ -179,62 +336,19 @@ def main():
         else:
             if start:
                 print_text(screen, font2,
-                           (SCREEN_WIDTH - gameover_size[0]) // 2, (SCREEN_HEIGHT - gameover_size[1]) // 2,
-                           'GAME OVER', RED)
+                          (SCREEN_WIDTH - font2.size('GAME OVER')[0]) // 2,
+                          (SCREEN_HEIGHT - font2.size('GAME OVER')[1]) // 2,
+                          'GAME OVER', RED)
 
-        # 画当前下落方块
-        _draw_block(screen, cur_block, 0, 0, cur_pos_x, cur_pos_y)
+        # Always draw score and next block
+        _draw_info(screen, font1, info_area_x, font1.size('得分')[1], score)
+        _draw_block(screen, next_block, info_area_x, 30 + (font1.size('得分')[1] + 6) * 5, 0, 0)
+
+        # Draw buttons
+        for button in buttons.values():
+            button.draw()
 
         pygame.display.flip()
-
-
-# 画背景
-def _draw_background(screen):
-    # 填充背景色
-    screen.fill(BG_COLOR)
-    # 画游戏区域分隔线
-    pygame.draw.line(screen, BORDER_COLOR,
-                     (SIZE * BLOCK_WIDTH + BORDER_WIDTH // 2, 0),
-                     (SIZE * BLOCK_WIDTH + BORDER_WIDTH // 2, SCREEN_HEIGHT), BORDER_WIDTH)
-
-
-# 画网格线
-def _draw_gridlines(screen):
-    # 画网格线 竖线
-    for x in range(BLOCK_WIDTH):
-        pygame.draw.line(screen, BLACK, (x * SIZE, 0), (x * SIZE, SCREEN_HEIGHT), 1)
-    # 画网格线 横线
-    for y in range(BLOCK_HEIGHT):
-        pygame.draw.line(screen, BLACK, (0, y * SIZE), (BLOCK_WIDTH * SIZE, y * SIZE), 1)
-
-
-# 画已经落下的方块
-def _draw_game_area(screen, game_area):
-    if game_area:
-        for i, row in enumerate(game_area):
-            for j, cell in enumerate(row):
-                if cell != '.':
-                    pygame.draw.rect(screen, BLOCK_COLOR, (j * SIZE, i * SIZE, SIZE, SIZE), 0)
-
-
-# 画单个方块
-def _draw_block(screen, block, offset_x, offset_y, pos_x, pos_y):
-    if block:
-        for i in range(block.start_pos.Y, block.end_pos.Y + 1):
-            for j in range(block.start_pos.X, block.end_pos.X + 1):
-                if block.template[i][j] != '.':
-                    pygame.draw.rect(screen, BLOCK_COLOR,
-                                     (offset_x + (pos_x + j) * SIZE, offset_y + (pos_y + i) * SIZE, SIZE, SIZE), 0)
-
-
-# 画得分等信息
-def _draw_info(screen, font, pos_x, font_height, score):
-    print_text(screen, font, pos_x, 10, f'得分: ')
-    print_text(screen, font, pos_x, 10 + font_height + 6, f'{score}')
-    print_text(screen, font, pos_x, 20 + (font_height + 6) * 2, f'速度: ')
-    print_text(screen, font, pos_x, 20 + (font_height + 6) * 3, f'{score // 10000}')
-    print_text(screen, font, pos_x, 30 + (font_height + 6) * 4, f'下一個：')
-
 
 if __name__ == '__main__':
     main()
