@@ -1,11 +1,11 @@
 import random
 from enum import Enum
+from config import BoardSize, Difficulty, BOARD_SIZES, DIFFICULTY_MINE_PERCENT, SIZE
 
 BLOCK_WIDTH = 30
 BLOCK_HEIGHT = 16
 SIZE = 20           # 块大小
 MINE_COUNT = 99     # 地雷数
-
 
 class BlockStatus(Enum):
     normal = 1  # 未点击
@@ -16,7 +16,6 @@ class BlockStatus(Enum):
     bomb = 6    # 踩中地雷
     hint = 7    # 被双击的周围
     double = 8  # 正被鼠标左右键双击
-
 
 class Mine:
     def __init__(self, x, y, value=0):
@@ -76,20 +75,32 @@ class Mine:
 
 
 class MineBlock:
-    def __init__(self):
-        self._block = [[Mine(i, j) for i in range(BLOCK_WIDTH)] for j in range(BLOCK_HEIGHT)]
-
+    def __init__(self, board_size=BoardSize.MEDIUM, difficulty=Difficulty.MEDIUM):
+        self.board_size = BOARD_SIZES[board_size]
+        self.width = self.board_size["width"]
+        self.height = self.board_size["height"]
+        self.mine_count = int(self.width * self.height * DIFFICULTY_MINE_PERCENT[difficulty])
+        
+        self._block = [[Mine(i, j) for i in range(self.width)] for j in range(self.height)]
+        
         # 埋雷
-        for i in random.sample(range(BLOCK_WIDTH * BLOCK_HEIGHT), MINE_COUNT):
-            self._block[i // BLOCK_WIDTH][i % BLOCK_WIDTH].value = 1
+        for i in random.sample(range(self.width * self.height), self.mine_count):
+            self._block[i // self.width][i % self.width].value = 1
 
-    def get_block(self):
+    @property
+    def block(self):
         return self._block
 
-    block = property(fget=get_block)
-
     def getmine(self, x, y):
-        return self._block[y][x]
+        if 0 <= x < self.width and 0 <= y < self.height:
+            return self._block[y][x]
+        return None
+
+    def _get_around(self, x, y):
+        """返回(x, y)周围的点的坐标"""
+        return [(i, j) for i in range(max(0, x - 1), min(self.width, x + 2))
+                for j in range(max(0, y - 1), min(self.height, y + 2))
+                if i != x or j != y]
 
     def open_mine(self, x, y):
         # 踩到雷了
@@ -100,7 +111,7 @@ class MineBlock:
         # 先把状态改为 opened
         self._block[y][x].status = BlockStatus.opened
 
-        around = _get_around(x, y)
+        around = self._get_around(x, y)
 
         _sum = 0
         for i, j in around:
@@ -123,10 +134,10 @@ class MineBlock:
 
         self._block[y][x].status = BlockStatus.double
 
-        around = _get_around(x, y)
+        around = self._get_around(x, y)
 
         sumflag = 0     # 周围被标记的雷数量
-        for i, j in _get_around(x, y):
+        for i, j in self._get_around(x, y):
             if self._block[j][i].status == BlockStatus.flag:
                 sumflag += 1
         # 周边的雷已经全部被标记
@@ -144,13 +155,6 @@ class MineBlock:
 
     def double_mouse_button_up(self, x, y):
         self._block[y][x].status = BlockStatus.opened
-        for i, j in _get_around(x, y):
+        for i, j in self._get_around(x, y):
             if self._block[j][i].status == BlockStatus.hint:
                 self._block[j][i].status = BlockStatus.normal
-
-
-def _get_around(x, y):
-    """返回(x, y)周围的点的坐标"""
-    # 这里注意，range 末尾是开区间，所以要加 1
-    return [(i, j) for i in range(max(0, x - 1), min(BLOCK_WIDTH - 1, x + 1) + 1)
-            for j in range(max(0, y - 1), min(BLOCK_HEIGHT - 1, y + 1) + 1) if i != x or j != y]
